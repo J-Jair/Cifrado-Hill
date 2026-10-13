@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cifrado de Hill | Proyecto Álgebra Lineal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        cardBg: '#1e293b',
+                        accentBlue: '#3b82f6',
+                        accentGreen: '#10b981',
+                        accentRed: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Estilos personalizados -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-darkBg text-slate-100 min-h-screen font-sans selection:bg-blue-500 selection:text-white">
+
+    <!-- Header Principal -->
+    <header class="border-b border-slate-800 bg-cardBg/50 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400">
+                    <i data-lucide="shield-check" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Cifrado de Hill Interactivo</h1>
+                    <p class="text-xs text-slate-400">Aplicación de Álgebra Lineal en Z26 — IUE</p>
+                </div>
+            </div>
+            <!-- Navegación por pestañas -->
+            <nav class="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-sm">
+                <button onclick="switchTab('cifrado')" id="tab-cifrado" class="px-4 py-2 rounded-lg font-medium transition-all bg-blue-600 text-white shadow">Cifrado / Descifrado</button>
+                <button onclick="switchTab('ataque')" id="tab-ataque" class="px-4 py-2 rounded-lg font-medium transition-all text-slate-400 hover:text-white">Criptoanálisis</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+
+        <!---------------- SECCIÓN 1: CIFRADO Y DESCIFRADO ---------------->
+        <section id="section-cifrado" class="space-y-6">
+            
+            <!-- Panel Didáctico Explicativo (Fundamentos Teóricos) -->
+            <div class="bg-slate-900/90 border border-blue-500/30 rounded-2xl p-5 shadow-lg space-y-3">
+                <button onclick="toggleInfoPanel()" class="w-full flex justify-between items-center text-left text-xs font-semibold text-blue-400 focus:outline-none">
+                    <span class="flex items-center gap-2 text-sm">
+                        <i data-lucide="book-open" class="w-4 h-4"></i> Guía Académica: ¿Cómo funciona matemáticamente el Cifrado de Hill? (Haz clic para expandir)
+                    </span>
+                    <i id="info-chevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
+                </button>
+                <div id="info-content" class="hidden pt-3 border-t border-slate-800 text-sm text-slate-300 space-y-3 leading-relaxed">
+                    <p><strong>1. ¿De dónde salen los números iniciales? (Tabla de Alfabeto Z26):</strong><br>
+                    En el criptosistema de Hill, las letras no se multiplican directamente. Se asigna a cada letra del alfabeto un valor numérico entero desde 0 hasta 25:<br>
+                    <code class="text-blue-300 font-mono">A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=10, L=11, M=12, N=13, O=14, P=15, Q=16, R=17, S=18, T=19, U=20, V=21, W=22, X=23, Y=24, Z=25</code></p>
+                    
+                    <p><strong>2. ¿Por qué se usa esa Matriz Clave (K) y no otra?</strong><br>
+                    La matriz clave debe ser cuadrada (2x2 o 3x3). No sirve cualquier número: para que el mensaje pueda ser descifrado posteriormente, la matriz debe ser <strong>invertible en aritmética modular 26</strong>. Esto se cumple estrictamente si el máximo común divisor entre su determinante y 26 es igual a 1: <code class="text-amber-300">MCD(det(K), 26) = 1</code>. Si el determinante es par o múltiplo de 13, la matriz destruye la información y no tiene inversa.</p>
+                    
+                    <p><strong>3. ¿Por qué se multiplica la matriz por esos números y qué significa?</strong><br>
+                    El texto plano se divide en bloques vectoriales p de acuerdo al tamaño de la matriz. La multiplicación matricial <code class="text-blue-300">K · p</code> mezcla algebraicamente los valores numéricos de las letras entre sí. Esto cumple el principio de <strong>difusión</strong> de Shannon: cambiar una sola letra del texto altera por completo todo el bloque cifrado.</p>
+
+                    <p><strong>4. ¿Por qué el resultado da esas letras específicas? (Reducción Módulo 26):</strong><br>
+                    Como la multiplicación y suma de matrices arroja números grandes, se aplica la operación aritmética <code class="text-amber-300">mod 26</code>. Esto envuelve el resultado numérico dentro del rango cíclico de 0 a 25. Finalmente, el número resultante se vuelve a buscar en la tabla alfabética para obtener la letra cifrada definitiva.</p>
+                </div>
+            </div>
+
+            <!-- Tabla de Referencia Rápida de Z26 (Desplegable) -->
+            <div class="bg-cardBg border border-slate-800 p-4 rounded-2xl shadow-xl space-y-3">
+                <button onclick="toggleSection('z26-content', 'z26-chevron')" class="w-full flex justify-between items-center text-left text-xs font-semibold text-slate-300 focus:outline-none">
+                    <span class="flex items-center gap-1.5 uppercase tracking-wider text-slate-400">
+                        <i data-lucide="hash" class="w-3.5 h-3.5 text-blue-400"></i> Tabla de Correspondencia Numérica Oficial (Z26) (Haz clic para expandir)
+                    </span>
+                    <i id="z26-chevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
+                </button>
+                <div id="z26-content" class="hidden pt-3 border-t border-slate-800">
+                    <div class="grid grid-cols-7 sm:grid-cols-13 lg:grid-cols-26 gap-1 text-center font-mono text-[20px]">
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">A</span><span class="text-blue-300 font-bold">0</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">B</span><span class="text-blue-300 font-bold">1</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">C</span><span class="text-blue-300 font-bold">2</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">D</span><span class="text-blue-300 font-bold">3</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">E</span><span class="text-blue-300 font-bold">4</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">F</span><span class="text-blue-300 font-bold">5</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">G</span><span class="text-blue-300 font-bold">6</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">H</span><span class="text-blue-300 font-bold">7</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">I</span><span class="text-blue-300 font-bold">8</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">J</span><span class="text-blue-300 font-bold">9</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">K</span><span class="text-blue-300 font-bold">10</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">L</span><span class="text-blue-300 font-bold">11</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">M</span><span class="text-blue-300 font-bold">12</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">N</span><span class="text-blue-300 font-bold">13</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">O</span><span class="text-blue-300 font-bold">14</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">P</span><span class="text-blue-300 font-bold">15</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">Q</span><span class="text-blue-300 font-bold">16</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">R</span><span class="text-blue-300 font-bold">17</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">S</span><span class="text-blue-300 font-bold">18</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">T</span><span class="text-blue-300 font-bold">19</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">U</span><span class="text-blue-300 font-bold">20</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">V</span><span class="text-blue-300 font-bold">21</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">W</span><span class="text-blue-300 font-bold">22</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">X</span><span class="text-blue-300 font-bold">23</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">Y</span><span class="text-blue-300 font-bold">24</span></div>
+                        <div class="bg-slate-900 p-1 rounded border border-slate-800"><span class="block text-slate-500 text-[20px]">Z</span><span class="text-blue-300 font-bold">25</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de Configuración de Clave y Desglose de Inversa -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Selector de Orden y Validador -->
+                <div class="bg-cardBg border border-slate-800 p-6 rounded-2xl shadow-xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="key" class="w-4 h-4 text-blue-400"></i> Matriz Clave (K)
+                            </h2>
+                            <select id="matrix-size" onchange="changeMatrixSize()" class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-blue-500">
+                                <option value="2">Orden 2x2</option>
+                                <option value="3">Orden 3x3</option>
+                            </select>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-4">La matriz debe ser cuadrada e invertible módulo 26: su determinante debe ser impar y no divisible por 13 (MCD con 26 igual a 1). Sus elementos individuales pueden ser pares o impares.</p>
+                        
+                        <div id="matrix-container" class="flex justify-center items-center py-2"></div>
+                    </div>
+
+                    <div id="matrix-status" class="mt-4 p-3 rounded-xl border text-xs flex items-center gap-2 transition-all"></div>
+                </div>
+
+                <!-- Entrada de Texto y Operación -->
+                <div class="bg-cardBg border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 flex flex-col justify-between space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="file-text" class="w-4 h-4 text-green-400"></i> Mensaje de Entrada
+                            </h2>
+                            <button onclick="loadExample()" class="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Cargar Ejemplo (ENVIGADO)
+                            </button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-400 mb-1">Escribe tu texto (genera clave aleatoria automática):</label>
+                                <input type="text" id="input-text" placeholder="Ej. ENVIGADO" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 uppercase tracking-widest text-sm focus:outline-none focus:border-blue-500 font-mono">
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-4">
+                                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                    <span class="text-xs text-slate-400 block mb-1">Vectores Bloque (p):</span>
+                                    <div id="vector-preview" class="text-xs font-mono text-blue-300 overflow-x-auto min-h-[1.5rem] flex items-center break-all">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Desglose Paso a Paso de la Matriz Inversa (K⁻¹) (Desplegable) -->
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <button onclick="toggleSection('inverse-content', 'inverse-chevron')" class="w-full flex justify-between items-center text-left text-xs font-semibold text-emerald-400 focus:outline-none">
+                            <span class="flex items-center gap-1.5">
+                                <i data-lucide="cpu" class="w-4 h-4"></i> Desglose Paso a Paso de la Matriz Inversa (K⁻¹) (Haz clic para expandir)
+                            </span>
+                            <i id="inverse-chevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
+                        </button>
+                        <div id="inverse-content" class="hidden pt-3 border-t border-slate-800 space-y-2 text-xs">
+                            <div id="inverse-preview" class="space-y-2 text-xs">
+                                <!-- Renderizado detallado por JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resultados Finales -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-3.5 bg-blue-950/20 border border-blue-500/30 rounded-xl">
+                            <span class="text-[11px] font-medium text-blue-400 block mb-1">TEXTO CIFRADO (c = Kp mod 26):</span>
+                            <div id="cipher-output" class="text-base font-bold font-mono tracking-widest text-white break-all whitespace-normal">-</div>
+                        </div>
+                        <div class="p-3.5 bg-emerald-950/20 border border-emerald-500/30 rounded-xl">
+                            <span class="text-[11px] font-medium text-emerald-400 block mb-1">TEXTO DESCIFRADO (p = K⁻¹c mod 26):</span>
+                            <div id="decipher-output" class="text-base font-bold font-mono tracking-widest text-white break-all whitespace-normal">-</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Desglose de Multiplicación Matricial por Bloques (Desplegable) -->
+            <div class="bg-cardBg border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+                <button onclick="toggleSection('mult-content', 'mult-chevron')" class="w-full flex justify-between items-center text-left text-sm font-semibold text-purple-400 focus:outline-none">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="list-tree" class="w-4 h-4"></i> Desglose de Multiplicación Matricial por Bloques (Haz clic para expandir)
+                    </span>
+                    <i id="mult-chevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
+                </button>
+                <div id="mult-content" class="hidden pt-4 border-t border-slate-800 space-y-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-900/80 text-slate-400 border-b border-slate-800 text-xs uppercase">
+                                <tr>
+                                    <th class="p-3 rounded-l-lg">Bloque</th>
+                                    <th class="p-3">Vector Entrada (p)</th>
+                                    <th class="p-3">Multiplicación Vectorial (K · p)</th>
+                                    <th class="p-3">Reducción Módulo 26</th>
+                                    <th class="p-3 rounded-r-lg">Letra Cifrada</th>
+                                </tr>
+                            </thead>
+                            <tbody id="steps-table-body" class="divide-y divide-slate-800/60 font-mono text-xs">
+                                <tr><td colspan="5" class="p-4 text-center text-slate-500">Ingresa texto para ver el desglose.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Representación Gráfica de Matrices por Bloque (Desplegable) -->
+            <div class="bg-cardBg border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+                <button onclick="toggleSection('graphic-content', 'graphic-chevron')" class="w-full flex justify-between items-center text-left text-sm font-semibold text-purple-400 focus:outline-none">
+                    <span class="flex items-center gap-2 uppercase tracking-wider text-xs">
+                        <i data-lucide="grid" class="w-4 h-4"></i> Representación Gráfica de Matrices por Bloque (Haz clic para expandir)
+                    </span>
+                    <i id="graphic-chevron" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
+                </button>
+                <div id="graphic-content" class="hidden pt-4 border-t border-slate-800">
+                    <div id="ai-explanation-container" class="space-y-4 max-h-[500px] overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+
+        </section>
+
+        <!---------------- SECCIÓN 2: CRIPTOANÁLISIS (ATAQUE PASO A PASO) ---------------->
+        <section id="section-ataque" class="space-y-6 hidden">
+            <div class="bg-cardBg border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
+                
+                <!-- Selector de submodo dentro del mismo criptoanálisis -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 gap-4">
+                    <div>
+                        <h2 class="text-sm font-semibold flex items-center gap-2 text-amber-400">
+                            <i data-lucide="cpu" class="w-4 h-4"></i> Módulos Avanzados de Criptoanálisis
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">Elige si prefieres calcular la clave con texto plano conocido o digitar directamente la matriz inversa.</p>
+                    </div>
+                    <div class="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+                        <button onclick="switchAttackMode('conocido')" id="btn-mode-conocido" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-amber-600 text-white shadow">Texto Plano Conocido</button>
+                        <button onclick="switchAttackMode('inversa')" id="btn-mode-inversa" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white">Digitar Matriz Inversa (K⁻¹)</button>
+                    </div>
+                </div>
+
+                <!-- SUBMODO 1: Texto Plano Conocido -->
+                <div id="attack-mode-conocido" class="space-y-6">
+                    <div class="max-w-3xl">
+                        <p class="text-xs text-slate-400">
+                            Demostración de la vulnerabilidad lineal del cifrado de Hill. Si interceptas un texto cifrado y conoces fragmentos del texto original (ej. sabes que comienza con <strong>ENVI</strong>), puedes despejar exactamente la matriz clave secreta resolviendo un sistema de ecuaciones matriciales.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-xl border border-slate-800">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-slate-200">1. Texto Plano Conocido (Ej. <code class="text-amber-300">ENVI</code>):</label>
+                            <p class="text-[11px] text-slate-400">Introduce texto plano y su cifrado correspondiente en bloques de 2. Si el ejemplo corto no permite invertir P, el programa usará el texto completo de la pestaña de cifrado cuando sus prefijos y el cifrado completo coincidan.</p>
+                            <input type="text" id="known-plain" value="ENVI" maxlength="100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-slate-200">2. Texto Cifrado Interceptado (Ej. <code class="text-amber-300">ZVJE</code>):</label>
+                            <p class="text-[11px] text-slate-400">Introduce el texto cifrado correspondiente, con la misma cantidad de letras y en el mismo orden.</p>
+                            <input type="text" id="known-cipher" value="ZVJE" maxlength="100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-6 rounded-xl border border-slate-800 space-y-2">
+                        <label class="block text-xs font-medium text-slate-200">3. Texto Cifrado Completo a Descifrar (Opcional):</label>
+                        <p class="text-[11px] text-slate-400">Introduce el mensaje cifrado completo capturado para revelar la frase secreta entera usando la clave descubierta.</p>
+                        <input type="text" id="full-intercepted-cipher" value="ZVJESMZY" placeholder="Ej. ZVJE..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-amber-500">
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button onclick="runCryptanalysis()" class="bg-amber-600 hover:bg-amber-500 text-white font-medium px-6 py-2.5 rounded-xl transition shadow-lg flex items-center gap-2 text-xs">
+                            <i data-lucide="zap" class="w-4 h-4"></i> Ejecutar Criptoanálisis Paso a Paso
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SUBMODO 2: Digitar Matriz Inversa (K⁻¹) Opcional -->
+                <div id="attack-mode-inversa" class="space-y-6 hidden">
+                    <div class="max-w-3xl">
+                        <p class="text-xs text-slate-400">
+                            Si ya posees o conoces la matriz inversa clave (<strong class="text-emerald-400">K⁻¹</strong>) de forma directa, puedes digitar sus componentes (ej. 15, 17, 10, 3) junto con el mensaje cifrado completo para realizar el descifrado inmediato ahorrando tiempo.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-xl border border-slate-800">
+                        <div class="space-y-3">
+                            <label class="block text-xs font-medium text-slate-200">1. Digita la Matriz Inversa (K⁻¹) (Orden 2x2):</label>
+                            <p class="text-[11px] text-slate-400">Introduce los 4 valores numéricos:</p>
+                            <div class="flex justify-center items-center py-2">
+                                <div class="grid gap-2 grid-cols-2">
+                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="15" data-row="0" data-col="0">
+                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="17" data-row="0" data-col="1">
+                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="10" data-row="1" data-col="0">
+                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="3" data-row="1" data-col="1">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-slate-200">2. Mensaje Cifrado Completo a Descifrar:</label>
+                            <p class="text-[11px] text-slate-400">Introduce el texto cifrado capturado (ej. ZVJESMZY):</p>
+                            <input type="text" id="custom-full-cipher" value="ZVJESMZY" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button onclick="runDecipherWithKnownInverse()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-2.5 rounded-xl transition shadow-lg flex items-center gap-2 text-xs">
+                            <i data-lucide="play-circle" class="w-4 h-4"></i> Descifrar con Matriz Inversa Paso a Paso
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Resultado del Ataque con Desglose Paso a Paso -->
+                <div id="attack-result" class="hidden p-6 bg-slate-950 border border-amber-500/30 rounded-xl space-y-6">
+                    <h3 id="attack-result-title" class="text-xs font-semibold text-amber-400 uppercase tracking-wider text-center">Desglose del Criptoanálisis</h3>
+                    <div id="attack-steps-container" class="space-y-4 text-xs font-mono"></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">
+        <p>Proyecto de Álgebra Lineal — Institución Universitaria de Envigado (IUE) © 2026</p>
+    </footer>
+
+    <!-- Script Principal -->
+    <script src="app.js"></script>
+    <script>
+        lucide.createIcons();
+        function toggleInfoPanel() {
+            const content = document.getElementById('info-content');
+            const chevron = document.getElementById('info-chevron');
+            content.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+
+        function toggleSection(contentId, chevronId) {
+            const content = document.getElementById(contentId);
+            const chevron = document.getElementById(chevronId);
+            content.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+    </script>
+</body>
+</html>
