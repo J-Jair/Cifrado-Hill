@@ -76,6 +76,7 @@ let currentSize = 2;
 
 function changeMatrixSize() {
     currentSize = parseInt(document.getElementById('matrix-size').value);
+    renderInverseMatrixInputs();
     let textVal = document.getElementById('input-text').value.toUpperCase().trim();
     if (textVal === "ENVIGADO") {
         if (currentSize === 2) {
@@ -112,6 +113,26 @@ function renderMatrixInputs(defaultValues = null) {
             input.dataset.row = i;
             input.dataset.col = j;
             input.oninput = processHillCipher;
+            grid.appendChild(input);
+        }
+    }
+    container.appendChild(grid);
+}
+
+function renderInverseMatrixInputs() {
+    const container = document.getElementById('inverse-matrix-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = `grid gap-2 grid-cols-${currentSize}`;
+    for (let row = 0; row < currentSize; row++) {
+        for (let col = 0; col < currentSize; col++) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500';
+            input.value = row === col ? 1 : 0;
+            input.dataset.row = row;
+            input.dataset.col = col;
             grid.appendChild(input);
         }
     }
@@ -527,7 +548,7 @@ function loadExample() {
 }
 
 // --- CRIPTOANÁLISIS PASO A PASO (TEXTO PLANO CONOCIDO) ---
-function runCryptanalysis() {
+function runCryptanalysisLegacy() {
     if (currentSize !== 2) {
         alert("El criptoanálisis interactivo está configurado para matrices de orden 2x2.");
         return;
@@ -861,8 +882,304 @@ function runCryptanalysis() {
     lucide.createIcons();
 }
 
-// --- MODO 2: DESCIFRADO TENIENDO DIRECTAMENTE LA MATRIZ INVERSA (K⁻¹) ---
+function renderAttackMatrix(matrix, color = "blue") {
+    const size = matrix.length;
+    const colorClass = color === "amber" ? "text-amber-300 border-amber-500/30" :
+        color === "emerald" ? "text-emerald-300 border-emerald-500/30" :
+        "text-blue-300 border-blue-500/30";
+    return `<div class="inline-grid gap-1 grid-cols-${size} bg-slate-950 p-2 rounded border ${colorClass} font-mono text-center">${
+        matrix.flat().map(value => `<div class="w-8 h-8 flex items-center justify-center bg-slate-900 rounded">${value}</div>`).join('')
+    }</div>`;
+}
+
+function invertMatrixModulo26(matrix) {
+    const determinantValue = determinant(matrix);
+    const inverseDeterminant = modInverse(mod(determinantValue, 26), 26);
+    if (inverseDeterminant === null) return null;
+    const adjugate = transpose(getCofactorMatrix(matrix));
+    return adjugate.map(row => row.map(value => mod(value * inverseDeterminant, 26)));
+}
+
+function multiplyMatricesModulo26(left, right) {
+    const size = left.length;
+    return Array.from({ length: size }, (_, row) =>
+        Array.from({ length: size }, (_, column) =>
+            mod(left[row].reduce((sum, value, index) => sum + value * right[index][column], 0), 26)
+        )
+    );
+}
+
+function encryptTextWithMatrix(text, matrix) {
+    const size = matrix.length;
+    const paddedText = text.padEnd(text.length + mod(-text.length, size), 'X');
+    let encrypted = '';
+    for (let offset = 0; offset < paddedText.length; offset += size) {
+        const vector = Array.from(paddedText.slice(offset, offset + size), charToNum);
+        encrypted += multiplyMatrixVector(matrix, vector).map(value => numToChar(value)).join('');
+    }
+    return encrypted;
+}
+
+function findInvertibleBlockSet(text, size) {
+    const blocks = [];
+    for (let offset = 0; offset + size <= text.length; offset += size) {
+        blocks.push(Array.from(text.slice(offset, offset + size), charToNum));
+    }
+    if (blocks.length < size) return null;
+
+    const selected = [];
+    let result = null;
+    const choose = (start) => {
+        if (selected.length === size) {
+            const matrix = Array.from({ length: size }, (_, row) =>
+                selected.map(blockIndex => blocks[blockIndex][row])
+            );
+            if (isInvertibleMatrixModulo26(matrix)) result = { indexes: [...selected], matrix };
+            return result !== null;
+        }
+        for (let index = start; index <= blocks.length - (size - selected.length); index++) {
+            selected.push(index);
+            if (choose(index + 1)) return true;
+            selected.pop();
+        }
+        return false;
+    };
+    choose(0);
+    return result;
+}
+
+function runCryptanalysis() {
+    const size = currentSize;
+    const enteredPlain = document.getElementById('known-plain').value.toUpperCase().replace(/[^A-Z]/g, '');
+    let knownPlain = enteredPlain.padEnd(enteredPlain.length + mod(-enteredPlain.length, size), 'X');
+    let knownCipher = document.getElementById('known-cipher').value.toUpperCase().replace(/[^A-Z]/g, '');
+    let fullCipher = document.getElementById('full-intercepted-cipher').value.toUpperCase().replace(/[^A-Z]/g, '');
+    const currentPlain = document.getElementById('input-text').value.toUpperCase().replace(/[^A-Z]/g, '');
+    const displayedCipher = document.getElementById('cipher-output').innerText.replace(/[^A-Z]/g, '');
+    const resDiv = document.getElementById('attack-result');
+    const stepsContainer = document.getElementById('attack-steps-container');
+    resDiv.classList.remove('hidden');
+
+    if (knownPlain.length < size || knownCipher.length !== knownPlain.length) {
+        alert(`Ingresa texto plano y cifrado con igual longitud y en bloques completos de ${size} letras.`);
+        return;
+    }
+
+    document.getElementById('attack-result-title').innerText =
+        `Desglose del Criptoanálisis ${size}x${size} (K = C · P⁻¹ mod 26)`;
+
+    let selected = findInvertibleBlockSet(knownPlain, size);
+    let generatedPadding = false;
+    if (!selected && (!fullCipher || fullCipher === displayedCipher) &&
+        currentPlain.startsWith(enteredPlain) && displayedCipher.startsWith(knownCipher) &&
+        knownCipher === encryptTextWithMatrix(knownPlain, getMatrixValues())) {
+        const activeKey = getMatrixValues();
+        if (!isInvertibleMatrixModulo26(activeKey)) {
+            stepsContainer.innerHTML = `<div class="p-4 bg-amber-950/60 text-amber-200 rounded border border-amber-700 text-xs">La matriz clave activa no es invertible módulo 26. Corrígela antes de usar el modo de criptoanálisis.</div>`;
+            return;
+        }
+
+        const requiredLength = size * size;
+        knownPlain = currentPlain.padEnd(Math.max(requiredLength, currentPlain.length + mod(-currentPlain.length, size)), 'X');
+        if (knownPlain.length % size !== 0) {
+            knownPlain = knownPlain.padEnd(knownPlain.length + mod(-knownPlain.length, size), 'X');
+        }
+        knownCipher = encryptTextWithMatrix(knownPlain, activeKey);
+        selected = findInvertibleBlockSet(knownPlain, size);
+
+        if (!selected) {
+            const independentBlocks = Array.from({ length: size }, (_, row) =>
+                Array.from({ length: size }, (_, column) => row === column ? 'B' : 'A').join('')
+            );
+            knownPlain += independentBlocks.join('');
+            knownCipher = encryptTextWithMatrix(knownPlain, activeKey);
+            selected = findInvertibleBlockSet(knownPlain, size);
+        }
+        generatedPadding = Boolean(selected);
+    }
+    if (!selected) {
+        stepsContainer.innerHTML = `<div class="p-4 bg-amber-950/60 text-amber-200 rounded border border-amber-700 text-xs">No se pudo formar una matriz de texto plano P invertible con los bloques conocidos. Esto no significa que la clave de cifrado sea incorrecta: proporciona más pares alineados de texto plano y cifrado, o un texto completo conocido. Para Hill, P debe tener determinante coprimo con 26.</div>`;
+        return;
+    }
+
+    const selectedPlainBlocks = selected.indexes.map(index =>
+        knownPlain.slice(index * size, (index + 1) * size)
+    );
+    const selectedCipherBlocks = selected.indexes.map(index =>
+        knownCipher.slice(index * size, (index + 1) * size)
+    );
+    const P = selected.matrix;
+    const C = Array.from({ length: size }, (_, row) =>
+        selected.indexes.map(index => charToNum(knownCipher[index * size + row]))
+    );
+    const detP = determinant(P);
+    const detPMod = mod(detP, 26);
+    const invDetP = modInverse(detPMod, 26);
+    const cofactorP = getCofactorMatrix(P);
+    const adjP = transpose(cofactorP);
+    const invP = invertMatrixModulo26(P);
+    const cofactorSteps = P.map((row, i) => row.map((_, j) => {
+        const minor = P.filter((_, rowIndex) => rowIndex !== i)
+            .map(matrixRow => matrixRow.filter((_, colIndex) => colIndex !== j));
+        const minorDet = determinant(minor);
+        const sign = (i + j) % 2 === 0 ? 1 : -1;
+        return `<div>C<sub>${i + 1}${j + 1}</sub> = (${sign}) × det(minor ${i + 1},${j + 1}) = ${sign} × ${minorDet} = ${cofactorP[i][j]}</div>`;
+    }).join('')).join('');
+
+    let K = multiplyMatricesModulo26(C, invP);
+    const allPairsMatch = Array.from({ length: knownPlain.length / size }, (_, blockIndex) => {
+        const plainVector = Array.from(knownPlain.slice(blockIndex * size, (blockIndex + 1) * size), charToNum);
+        const expected = Array.from(knownCipher.slice(blockIndex * size, (blockIndex + 1) * size), charToNum);
+        const actual = multiplyMatrixVector(K, plainVector).map(value => mod(value, 26));
+        return actual.every((value, index) => value === expected[index]);
+    }).every(Boolean);
+
+    if (!allPairsMatch) {
+        stepsContainer.innerHTML = `<div class="p-4 bg-amber-950/60 text-amber-200 rounded border border-amber-700 text-xs">Los pares de texto plano y texto cifrado no corresponden todos a la misma clave ${size}x${size}. Revisa que estén alineados, tengan igual longitud y hayan sido cifrados con la matriz seleccionada.</div>`;
+        return;
+    }
+
+    const matrixHtml = (matrix, color) => renderAttackMatrix(matrix, color);
+    const scalarSteps = adjP.map((row, i) => row.map((value, j) =>
+        `<div class="bg-slate-900/60 p-2 rounded border border-slate-800/60">• Posición (${i + 1},${j + 1}): (${value} × ${invDetP}) = ${value * invDetP} mod 26 = <strong class="text-emerald-400">${invP[i][j]}</strong></div>`
+    ).join('')).join('');
+    const keySteps = K.map((row, i) => row.map((value, j) => {
+        const products = C[i].map((entry, index) => `(${entry} × ${invP[index][j]})`);
+        const raw = C[i].reduce((sum, entry, index) => sum + entry * invP[index][j], 0);
+        return `<div>K<sub>${i + 1}${j + 1}</sub> = ${products.join(' + ')} = ${raw} ≡ <strong class="text-amber-300">${value}</strong> (mod 26)</div>`;
+    }).join('')).join('');
+    const detK = determinant(K);
+    const detKMod = mod(detK, 26);
+    const invDetK = modInverse(detKMod, 26);
+
+    let html = `
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+            <span class="text-blue-400 font-bold block text-sm">Paso 1: Conversión de bloques y construcción de P y C</span>
+            <p class="text-slate-300 text-xs">${generatedPadding ? `Para completar la demostración se añadió X hasta alcanzar ${size * size} letras. Como los bloques repetidos XXX pueden dejar P sin inversa, también se añadieron bloques de prueba independientes cifrados con la clave activa. Estos bloques adicionales permiten mostrar la recuperación y no forman parte del mensaje original.` : ''} Cada bloque tiene ${size} letras, convertidas a valores Z26 (A=0,…,Z=25). Se usan los bloques ${selected.indexes.map(index => index + 1).join(', ')} para formar columnas:</p>
+            <div class="flex flex-wrap justify-around gap-4 text-xs">
+                <div><span>Matriz de texto plano P:</span><div class="mt-1">${matrixHtml(P, 'blue')}</div><p class="text-slate-400 mt-1">${selectedPlainBlocks.join(' | ')}</p></div>
+                <div><span>Matriz de texto cifrado C:</span><div class="mt-1">${matrixHtml(C, 'amber')}</div><p class="text-slate-400 mt-1">${selectedCipherBlocks.join(' | ')}</p></div>
+            </div>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+            <span class="text-blue-400 font-bold block text-sm">Paso 2: Inversa de P módulo 26</span>
+            <p class="text-slate-300">det(P) = ${detP}; det(P) mod 26 = ${detPMod}. Como MCD(${detPMod},26)=1, el inverso del determinante es ${invDetP}, pues ${detPMod} × ${invDetP} ≡ 1 (mod 26).</p>
+            <div class="flex flex-wrap justify-around gap-4 text-xs">
+                <div><span>Matriz de cofactores:</span><div class="mt-1">${matrixHtml(cofactorP, 'blue')}</div><details class="mt-2"><summary class="cursor-pointer text-blue-300">Ver cálculo de los menores y cofactores</summary><div class="space-y-1 mt-2">${cofactorSteps}</div></details></div>
+                <div><span>Adjunta adj(P) = cofactoresᵀ:</span><div class="mt-1">${matrixHtml(adjP, 'blue')}</div></div>
+                <div><span>Inversa P⁻¹ = ${invDetP} · adj(P) mod 26:</span><div class="mt-1">${matrixHtml(invP, 'emerald')}</div></div>
+            </div>
+            <details class="text-slate-300"><summary class="cursor-pointer text-blue-300">Ver cálculo escalar de cada elemento de P⁻¹</summary><div class="space-y-1 mt-2">${scalarSteps}</div></details>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+            <span class="text-blue-400 font-bold block text-sm">Paso 3: Recuperación de la clave K = C · P⁻¹ mod 26</span>
+            <div class="flex flex-wrap justify-around items-center gap-4">
+                <div>C = ${matrixHtml(C, 'amber')}</div><span>×</span>
+                <div>P⁻¹ = ${matrixHtml(invP, 'emerald')}</div><span>=</span>
+                <div>K = ${matrixHtml(K, 'amber')}</div>
+            </div>
+            <details><summary class="cursor-pointer text-blue-300">Ver producto fila por columna</summary><div class="space-y-1 mt-2 text-slate-300">${keySteps}</div></details>
+            <p class="${invDetK !== null ? 'text-emerald-400' : 'text-amber-200'}">det(K)=${detK}; det(K) mod 26=${detKMod}. ${invDetK !== null ? 'La clave recuperada es invertible módulo 26.' : 'Los pares suministrados definen una transformación que no es una clave Hill invertible.'}</p>
+        </div>`;
+
+    if (invDetK !== null && fullCipher.length > 0) {
+        fullCipher = fullCipher.padEnd(fullCipher.length + mod(-fullCipher.length, size), 'X');
+        const invK = invertMatrixModulo26(K);
+        let decrypted = '';
+        const blockDetails = [];
+        for (let offset = 0; offset < fullCipher.length; offset += size) {
+            const cipherBlock = fullCipher.slice(offset, offset + size);
+            const cipherVector = Array.from(cipherBlock, charToNum);
+            const plainVector = multiplyMatrixVector(invK, cipherVector).map(value => mod(value, 26));
+            const plainBlock = plainVector.map(numToChar).join('');
+            decrypted += plainBlock;
+            const products = invK.map(row => {
+                const raw = row.reduce((sum, value, index) => sum + value * cipherVector[index], 0);
+                return `<div>${row.map((value, index) => `(${value} × ${cipherVector[index]})`).join(' + ')} = ${raw} ≡ ${mod(raw, 26)} (mod 26)</div>`;
+            }).join('');
+            blockDetails.push(`<div class="bg-slate-950/90 p-3 rounded-lg border border-slate-800 space-y-2">
+                <strong>Bloque ${offset / size + 1}: ${cipherBlock} → ${plainBlock}</strong>
+                <div class="flex flex-wrap justify-around gap-3">${matrixHtml(invK, 'emerald')} <span>× [${cipherVector.join(', ')}]ᵀ</span> → [${plainVector.join(', ')}]ᵀ</div>
+                <div class="text-slate-300">${products}</div>
+            </div>`);
+        }
+        html += `<div class="bg-emerald-950/30 p-4 rounded-xl border border-emerald-500/30 space-y-3">
+            <span class="text-emerald-400 font-bold block text-sm">Paso 4: Descifrado p = K⁻¹ · c mod 26</span>
+            <p>Matriz inversa de K: ${matrixHtml(invK, 'emerald')}</p>
+            <div class="space-y-2">${blockDetails.join('')}</div>
+            <p class="font-bold text-white text-center bg-slate-950 p-3 rounded">MENSAJE DESCIFRADO: ${decrypted}</p>
+        </div>`;
+    }
+
+    stepsContainer.innerHTML = html;
+    lucide.createIcons();
+}
+
 function runDecipherWithKnownInverse() {
+    const size = currentSize;
+    const inputs = Array.from(document.querySelectorAll('.inv-matrix-input'));
+    if (inputs.length !== size * size) {
+        alert(`La matriz inversa debe tener ${size}x${size} valores.`);
+        return;
+    }
+    const invK = Array.from({ length: size }, () => Array(size).fill(0));
+    inputs.forEach(input => {
+        invK[Number(input.dataset.row)][Number(input.dataset.col)] = Number.parseInt(input.value, 10) || 0;
+    });
+    if (!isInvertibleMatrixModulo26(invK)) {
+        alert("La matriz ingresada no es invertible módulo 26. Su determinante debe ser coprimo con 26.");
+        return;
+    }
+
+    let fullCipher = document.getElementById('custom-full-cipher').value.toUpperCase().replace(/[^A-Z]/g, '');
+    if (!fullCipher) {
+        alert("Por favor ingresa un mensaje cifrado válido para descifrar.");
+        return;
+    }
+    fullCipher = fullCipher.padEnd(fullCipher.length + mod(-fullCipher.length, size), 'X');
+
+    const resDiv = document.getElementById('attack-result');
+    resDiv.classList.remove('hidden');
+    document.getElementById('attack-result-title').innerText =
+        `Descifrado directo con matriz inversa ${size}x${size}`;
+    const stepsContainer = document.getElementById('attack-steps-container');
+    const blockDetails = [];
+    let decrypted = '';
+
+    for (let offset = 0; offset < fullCipher.length; offset += size) {
+        const cipherBlock = fullCipher.slice(offset, offset + size);
+        const cipherVector = Array.from(cipherBlock, charToNum);
+        const plainVector = multiplyMatrixVector(invK, cipherVector).map(value => mod(value, 26));
+        const plainBlock = plainVector.map(numToChar).join('');
+        decrypted += plainBlock;
+        const rowCalculations = invK.map(row => {
+            const terms = row.map((value, index) => `(${value} × ${cipherVector[index]})`);
+            const raw = row.reduce((sum, value, index) => sum + value * cipherVector[index], 0);
+            return `<div>${terms.join(' + ')} = ${raw} ≡ ${mod(raw, 26)} (mod 26)</div>`;
+        }).join('');
+        blockDetails.push(`<div class="bg-slate-950/90 p-3 rounded-lg border border-slate-800 space-y-2">
+            <strong>Bloque ${offset / size + 1}: ${cipherBlock} → ${plainBlock}</strong>
+            <div class="flex flex-wrap justify-around gap-3">${renderAttackMatrix(invK, 'emerald')} <span>× [${cipherVector.join(', ')}]ᵀ → [${plainVector.join(', ')}]ᵀ</span></div>
+            <div class="text-slate-300">${rowCalculations}</div>
+        </div>`);
+    }
+
+    stepsContainer.innerHTML = `
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+            <span class="text-emerald-400 font-bold block text-sm">Paso 1: Matriz inversa K⁻¹ ingresada</span>
+            <p class="text-slate-300">Se descifra en bloques de ${size} letras. Determinante = ${determinant(invK)} (mod 26 = ${mod(determinant(invK), 26)}); la matriz es invertible.</p>
+            <div class="flex justify-center">${renderAttackMatrix(invK, 'emerald')}</div>
+        </div>
+        <div class="bg-emerald-950/30 p-4 rounded-xl border border-emerald-500/30 space-y-3">
+            <span class="text-emerald-400 font-bold block text-sm">Paso 2: Multiplicación p = K⁻¹ · c mod 26, bloque por bloque</span>
+            <div class="space-y-2">${blockDetails.join('')}</div>
+            <p class="font-bold text-white text-center bg-slate-950 p-3 rounded">MENSAJE DESCIFRADO: ${decrypted}</p>
+        </div>`;
+    lucide.createIcons();
+}
+
+// --- MODO 2: DESCIFRADO TENIENDO DIRECTAMENTE LA MATRIZ INVERSA (K⁻¹) ---
+function runDecipherWithKnownInverseLegacy() {
     const inputs = document.querySelectorAll('.inv-matrix-input');
     let invK = [
         [parseInt(inputs[0].value) || 0, parseInt(inputs[1].value) || 0],
@@ -973,6 +1290,7 @@ function runDecipherWithKnownInverse() {
 // Vinculación de eventos al cargar la página
 document.addEventListener("DOMContentLoaded", function() {
     document.getElementById('input-text').addEventListener('input', handleTextInput);
+    renderInverseMatrixInputs();
     renderMatrixInputs([3, 3, 2, 5]);
     document.getElementById('input-text').value = "ENVIGADO";
     lastProcessedText = "ENVIGADO";

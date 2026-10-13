@@ -264,19 +264,19 @@
                 <div id="attack-mode-conocido" class="space-y-6">
                     <div class="max-w-3xl">
                         <p class="text-xs text-slate-400">
-                            Demostración de la vulnerabilidad lineal del cifrado de Hill. Si interceptas un texto cifrado y conoces fragmentos del texto original (ej. sabes que comienza con <strong>ENVI</strong>), puedes despejar exactamente la matriz clave secreta resolviendo un sistema de ecuaciones matriciales.
+                            Demostración de la vulnerabilidad lineal del cifrado de Hill para claves 2x2 y 3x3. Con suficientes bloques alineados de texto plano y cifrado, puedes recuperar la clave mediante K = C · P⁻¹ mod 26.
                         </p>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-xl border border-slate-800">
                         <div class="space-y-2">
-                            <label class="block text-xs font-medium text-slate-200">1. Texto Plano Conocido (Ej. <code class="text-amber-300">ENVI</code>):</label>
-                            <p class="text-[11px] text-slate-400">Introduce texto plano y su cifrado correspondiente en bloques de 2. Si el ejemplo corto no permite invertir P, el programa usará el texto completo de la pestaña de cifrado cuando sus prefijos y el cifrado completo coincidan.</p>
+                            <label class="block text-xs font-medium text-slate-200">1. Texto Plano Conocido:</label>
+                            <p class="text-[11px] text-slate-400">Ingresa texto plano y su cifrado en bloques de n (2 o 3). Si es un texto de esta aplicación más corto que n², se completa con X y se generan bloques de prueba cifrados con la clave activa para mostrar los pasos.</p>
                             <input type="text" id="known-plain" value="ENVI" maxlength="100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-amber-500">
                         </div>
                         <div class="space-y-2">
-                            <label class="block text-xs font-medium text-slate-200">2. Texto Cifrado Interceptado (Ej. <code class="text-amber-300">ZVJE</code>):</label>
-                            <p class="text-[11px] text-slate-400">Introduce el texto cifrado correspondiente, con la misma cantidad de letras y en el mismo orden.</p>
+                            <label class="block text-xs font-medium text-slate-200">2. Texto Cifrado Interceptado:</label>
+                            <p class="text-[11px] text-slate-400">Debe corresponder exactamente al texto plano, con la misma longitud y en el mismo orden.</p>
                             <input type="text" id="known-cipher" value="ZVJE" maxlength="100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-amber-500">
                         </div>
                     </div>
@@ -304,20 +304,15 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-xl border border-slate-800">
                         <div class="space-y-3">
-                            <label class="block text-xs font-medium text-slate-200">1. Digita la Matriz Inversa (K⁻¹) (Orden 2x2):</label>
-                            <p class="text-[11px] text-slate-400">Introduce los 4 valores numéricos:</p>
+                            <label class="block text-xs font-medium text-slate-200">1. Digita la Matriz Inversa (K⁻¹):</label>
+                            <p class="text-[11px] text-slate-400">La dimensión sigue el orden 2x2 o 3x3 seleccionado en la pestaña de cifrado.</p>
                             <div class="flex justify-center items-center py-2">
-                                <div class="grid gap-2 grid-cols-2">
-                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="15" data-row="0" data-col="0">
-                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="17" data-row="0" data-col="1">
-                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="10" data-row="1" data-col="0">
-                                    <input type="number" class="inv-matrix-input w-12 h-12 bg-slate-950 border border-slate-700 text-center text-emerald-300 font-bold rounded-lg font-mono text-sm focus:outline-none focus:border-emerald-500" value="3" data-row="1" data-col="1">
-                                </div>
+                                <div id="inverse-matrix-container"></div>
                             </div>
                         </div>
                         <div class="space-y-2">
                             <label class="block text-xs font-medium text-slate-200">2. Mensaje Cifrado Completo a Descifrar:</label>
-                            <p class="text-[11px] text-slate-400">Introduce el texto cifrado capturado (ej. ZVJESMZY):</p>
+                            <p class="text-[11px] text-slate-400">Introduce el texto cifrado capturado; se agrupa según el orden seleccionado.</p>
                             <input type="text" id="custom-full-cipher" value="ZVJESMZY" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 uppercase font-mono tracking-widest text-sm focus:outline-none focus:border-emerald-500">
                         </div>
                     </div>
